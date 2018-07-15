@@ -16,10 +16,14 @@ import matplotlib.gridspec as gridspec
 class pca_imagecube(object):
     """
     Wrapper for the pca class that can handle cubes of images. 
-    It flattens the images into 1D vectors referred to objects. The pixels of 
-    the images are referred to as attributes. We therefore end up with a 2D 
+    It flattens the images into 1D vectors referred to attributes. The pixels of 
+    the images are referred to as objects. We therefore end up with a 2D 
     maxtrix of Nobj objects (rows) by Katt attributes (columns) that is the starting
     point for the PCA, implemented in another class called pca.
+    Additionnaly this class implements some help for the interpretation: the 
+    eigenvalues are plotted, the principal components can be saved (cube of images),
+    the contribution of the pixels to each eigenmode is saved, and the quality 
+    of representation of each pixel. 
     """
 
     def __init__(self,datacube,method='cor',verbose=True,radii=None,\
