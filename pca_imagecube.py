@@ -111,7 +111,7 @@ class pca_imagecube(object):
             print('The path was not specified. Set a path before writing results to disk.')
         return
     
-    def reconstruct_data(self,datacube=None,truncation=None):
+    def reconstruct_data(self,datacube=None,truncation=None,save=False):
         """
         Reconstructs the datacube, by applying a (truncated) pca. If datacube is
         not specified, it assumes the we want to reconstruct the data used to 
@@ -123,6 +123,7 @@ class pca_imagecube(object):
             - truncation: integer that should be smaller than the number of frames
                             to perform the truncation of the data. If none, use 
                             all the frames.
+            - save: boolean to save the reconstructed cube (called *_reconstructed_cube.fits)
         Output:
             - reconstructed_datacube:
         """    
@@ -130,12 +131,12 @@ class pca_imagecube(object):
             reconstructed_datacube = np.zeros((self.nframes,self.ny,self.nx))*np.nan
             for i in range(self.nb_annuli):
                 reconstructed_data = self.pca_array[i].project_data(data=datacube,\
-                                    truncation=truncation,method=self.method)
+                                    truncation=truncation)
                 reconstructed_datacube[:,self.y_indices_array[i],self.x_indices_array[i]] = \
                     reconstructed_data.T
         else:
             if datacube.ndim==2:
-                datacube = datacube.reshape((1,datacube.shape[0].datacube.shape[1]))
+                datacube = datacube.reshape((1,datacube.shape[0],datacube.shape[1]))
             elif datacube.ndim !=3:
                 raise IndexError('The input datacube must be a 3D or 2D numpy array !')
             if datacube.shape[1] != self.ny or datacube.shape[2] != self.nx:
@@ -144,14 +145,61 @@ class pca_imagecube(object):
             for i in range(self.nb_annuli):
                 data_flattened = datacube[:,self.y_indices_array[i],self.x_indices_array[i]].T
                 reconstructed_data = self.pca_array[i].project_data(data=data_flattened,\
-                                    truncation=truncation,method=self.method)
+                                    truncation=truncation)
                 reconstructed_datacube[:,self.y_indices_array[i],self.x_indices_array[i]] = \
                     reconstructed_data.T
                 if reconstructed_datacube.shape[0]==1: # to return a 2D frame instead of a cube
                     reconstructed_datacube.reshape((self.ny,self.nx))
+        if save:
+            fits.writeto(os.path.join(self.path,self.prefix+'_reconstructed_cube.fits'),\
+                reconstructed_datacube,header=self.header,overwrite=True)
         return reconstructed_datacube
-            
     
+    def compute_residuals(self,datacube=None,truncation=None,save=False):
+        """
+        Reconstructs the datacube, by applying a (truncated) pca and subtract
+        the reconstructed data cube from the data themselves to obtain the
+        residuals. If datacube is not specified, it assumes the we want 
+        to use the data used to build the eigenmodes (ADI mode). 
+        If datacube is specified, it will project this 
+        datacube on the eigenmodes (RDI mode). 
+        Input:
+            - datacube: the data to project. If None, assumes we use the cube itself
+                    otherwise, expects a cube of data with the same number of pixels.
+            - truncation: integer that should be smaller than the number of frames
+                            to perform the truncation of the data. If none, use 
+                            all the frames.
+            - save: boolean to save the cube of residuals (called *_residuals_cube.fits)
+        Output:
+            - residuals_datacube:
+        """
+        if datacube is None:
+            residuals_datacube = np.zeros((self.nframes,self.ny,self.nx))*np.nan
+            for i in range(self.nb_annuli):
+                residuals_data = self.pca_array[i].project_and_subtract(data=datacube,\
+                                    truncation=truncation)
+                residuals_datacube[:,self.y_indices_array[i],self.x_indices_array[i]] = \
+                    residuals_data.T
+        else:
+            if datacube.ndim==2:
+                datacube = datacube.reshape((1,datacube.shape[0],datacube.shape[1]))
+            elif datacube.ndim !=3:
+                raise IndexError('The input datacube must be a 3D or 2D numpy array !')
+            if datacube.shape[1] != self.ny or datacube.shape[2] != self.nx:
+                raise IndexError('The input frames must be {0:d} x {1:d} px !'.format(self.nx,self.ny))
+            residuals_datacube = np.zeros_like(datacube)*np.nan
+            for i in range(self.nb_annuli):
+                data_flattened = datacube[:,self.y_indices_array[i],self.x_indices_array[i]].T
+                residuals_data = self.pca_array[i].project_and_subtract(data=data_flattened,\
+                                    truncation=truncation)
+                residuals_datacube[:,self.y_indices_array[i],self.x_indices_array[i]] = \
+                    residuals_data.T
+                if residuals_datacube.shape[0]==1: # to return a 2D frame instead of a cube
+                    residuals_datacube.reshape((self.ny,self.nx))
+        if save:
+            fits.writeto(os.path.join(self.path,self.prefix+'_residuals_cube.fits'),\
+                residuals_datacube,header=self.header,overwrite=True)
+        return residuals_datacube        
                     
     def get_principal_components(self,truncation=None,save=False):
         """
@@ -299,59 +347,31 @@ class pca_imagecube(object):
 
 if __name__=='__main__':
 
-    import adiUtilities as adi
-    import vip_hci as vip
-    ds9=vip.fits.ds9()
-
+    # example how to use this class
     path_root = '/Users/jmilli/Documents/RDI'
     path_out = os.path.join(path_root,'test_pipeline')
     cubeA = fits.getdata(os.path.join(path_root,'hip21986A_fc.fits'))
     headerA = fits.getheader(os.path.join(path_root,'hip21986A_fc.fits'))
+
+    pca_cubeA = pca_imagecube(cubeA,method='cor',verbose=True,radii=[0,20,200],\
+                 path=path_out,name='hip21986A',header=headerA) #other available methods are: 'cov' # 'cor' #'ssq'  
+
+    # to save the statistics
+    pca_cubeA.save_statistics(truncation=10)
+
+    # to compute the residuals of cubeA in ADI
+    residuals_cubeA_ADI = pca_cubeA.compute_residuals(truncation=12)
     
-    method= 'cor' #'cov' # 'cor' #'ssq'    
 
-    pca_cube = pca_imagecube(cubeA,method=method,verbose=True,radii=[0,20,200],\
-                 path=path_out,name='hip21986A',header=headerA)
-
-    pca_cube.save_statistics(truncation=10)
-
-    reconstructed_datacube = pca_cube.reconstruct_data(truncation=None)
-    reconstructed_datacube2 = pca_cube.reconstruct_data(datacube=cubeA,truncation=None)
-    ds9.display(reconstructed_datacube-reconstructed_datacube2)
-    
-#    ds9.display(cubeA,reconstructed_datacube,cubeA-reconstructed_datacube)
-
-#    pca_cube.write_map()
-#    pc_cube = pca_cube.get_principal_components(save=True)
-#    ctr_cube = pca_cube.get_contribution(save=True)
-#    ctr = pca_cube.get_total_contribution(save=True)
-#    co2 = pca_cube.get_quality_of_representation(save=True)
-
-#    
-##    fits.writeto(os.path.join(path_out,'hip21986A_fc_reconstructed.fits'),reconstructed_datacube,overwrite=True)
-#
-#    ds9.display(cubeA-reconstructed_datacube)
-#    residuals = cubeA-reconstructed_datacube
-#    median_cube = np.median(cubeA,axis=0)
-#    median_residuals = np.nanmedian(residuals,axis=0)
-#    ds9.display(median_cube,median_residuals)
-# 
-#    cubeSubtracted = cubeA-reconstructed_datacube
-#    
-#    fits.writeto(os.path.join(path_out,'hip21986A_fc_subtracted.fits'),cubeSubtracted,overwrite=True)
-    parangle = np.asarray(pd.read_csv(os.path.join(path_root,'hip21986A_fc_angs.txt'),header=None)[0])
-#    pca_image = adi.derotateCollapse(cubeSubtracted,-parangle,rotoff=0.,trim=0.4)
-#    fits.writeto(os.path.join(path_out,'hip21986A_pca_adi.fits'),pca_image,overwrite=True)
-##
+    # now we assume we have a second data cube of a reference star B    
     cubeB = fits.getdata(os.path.join(path_root,'hip21986B_nfc.fits'))
-    reconstructed_datacubeB_fromA = pca_cube.reconstruct_data(datacube=cubeB,truncation=None)
-    ds9.display(cubeB,cubeB-reconstructed_datacubeB_fromA)
+    headerB = fits.getdata(os.path.join(path_root,'hip21986B_nfc.fits'))
 
-
-    pca_cube = pca_imagecube(cubeB,method='cov',verbose=True,radii=[0,20,200],\
-             path=path_out,name='hip21986B',header=headerA)#,radii=[6,20,116]
-    reconstructed_datacubeA_fromB = pca_cube.reconstruct_data(datacube=cubeA,truncation=None)
-    pca_image = adi.derotateCollapse(cubeA-reconstructed_datacubeA_fromB,parangle,rotoff=0.,trim=0.4)
-    fits.writeto(os.path.join(path_out,'hip21986A_pca_rdi.fits'),pca_image,overwrite=True)
-#    ds9.display(
-            
+    # we use this cube to compute the eigenvectors
+    pca_cubeB = pca_imagecube(cubeB,method='ssq',verbose=True,radii=[0,20,200],\
+         path=path_out,name='hip21986B',header=headerB)
+    # we compute the redisuals of cubeA after projection of the eigenmodes of B
+    residuals_cubeA_RDI = pca_cubeB.compute_residuals(datacube=cubeA,truncation=None)
+ 
+    
+    

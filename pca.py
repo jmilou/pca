@@ -185,13 +185,10 @@ class pca(object):
             matrix_projected = np.dot(pc_extra_attributes,eigenvect_attributes_space.T).T
         return matrix_projected                
 
-    def project_data(self,data=None,truncation=None,method='cov'):
+    def project_data(self,data=None,truncation=None):
         """
         Function that calls the project_matrix function but preliminarily subtracts
         the mean or divide by the standard deviation to normalize the data.
-
-        Not sure whether we want to leave the method as an argument. Maybe
-        we want to force to use self.method instead. 
         Input:
             - data: the data to project on the eigenvectors. Its shape must 
                     be (Ndata,Katt). By default, assumes you want to project the
@@ -216,23 +213,59 @@ class pca(object):
         # if we project a different matrix, then we first subtract mean, scale by
         # the stdev, then we project, and then we rescale and add the mean
         else:            
-            if method == 'cov':
+            if self.method == 'cov':
                 mean_att = np.nanmean(data,axis=0) #mean of each attribute, size Katt 
                 matrix = data-mean_att
-            elif method == 'cor':
+            elif self.method == 'cor':
                 mean_att = np.nanmean(data,axis=0) #mean of each attribute, size Katt 
                 std_att = np.nanstd(data,axis=0) #std of each attribute, size Katt
                 matrix = (data-mean_att)/std_att            
-            elif method == 'ssq':
+            elif self.method == 'ssq':
                 matrix = data
             reconstructed_matrix = self.project_matrix(matrix=matrix,\
                                 truncation=truncation)
-            if method == 'cov':
+            if self.method == 'cov':
                 return reconstructed_matrix+mean_att
-            elif method == 'cor':
+            elif self.method == 'cor':
                 return reconstructed_matrix*std_att+mean_att
-            elif method == 'ssq':
-                return reconstructed_matrix                    
+            elif self.method == 'ssq':
+                return reconstructed_matrix       
+
+    def project_and_subtract(self,data=None,truncation=None):
+        """
+        Function that calls the project_data function to get the projected 
+        data points and then subtract this result from the data to obtain the 
+        residuals.
+        Input:
+            - data: the data to project on the eigenvectors. Its shape must 
+                    be (Ndata,Katt). By default, assumes you want to project the
+                    data itself and in this case uses the reduced matrix
+                    of shape (Nobj,Katt)
+            - truncation: None (by default) to use all vectors or an integer smaller
+                        than Katt to truncate the number of modes.
+        Output:
+            - the residuals of shape (Ndata,Katt) 
+        """             
+        if data is None:
+            if self.method == 'cor':
+                return (self.matrix - self.project_matrix(matrix=None,truncation=truncation))*self.std_att # the mean disappears in the difference
+            elif self.method == 'cov' or self.method == 'ssq':
+                return self.matrix - self.project_matrix(matrix=None,truncation=truncation)
+        else:
+            if self.method == 'cov':
+                mean_att = np.nanmean(data,axis=0) #mean of each attribute, size Katt 
+                matrix = data-mean_att
+            elif self.method == 'cor':
+                mean_att = np.nanmean(data,axis=0) #mean of each attribute, size Katt 
+                std_att = np.nanstd(data,axis=0) #std of each attribute, size Katt
+                matrix = (data-mean_att)/std_att            
+            elif self.method == 'ssq':
+                matrix = data
+            reconstructed_matrix = self.project_matrix(matrix=matrix,truncation=truncation)
+            if self.method == 'cov' or self.method=='ssq':
+                return matrix - reconstructed_matrix
+            elif self.method == 'cor':
+                return (matrix - reconstructed_matrix)*std_att
 
     def get_contribution(self): 
         """
