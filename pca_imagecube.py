@@ -359,8 +359,12 @@ if __name__=='__main__':
     # to save the statistics
     pca_cubeA.save_statistics(truncation=10)
 
+    pc = pca_cubeA.get_principal_components(save=False)
+
+    pca_cubeA_projection = pca_cubeA.reconstruct_data(truncation=3,save=False)
+
     # to compute the residuals of cubeA in ADI
-    residuals_cubeA_ADI = pca_cubeA.compute_residuals(truncation=12)
+    pca_cubeAresiduals_cubeA_ADI = pca_cubeA.compute_residuals(truncation=12)
     
 
     # now we assume we have a second data cube of a reference star B    

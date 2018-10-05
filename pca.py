@@ -299,6 +299,7 @@ class pca(object):
         plt.ylabel('Part of inertia explained by the mode')
         plt.xlabel('Eigenmode number')
         if filename!=None:
+            plt.tight_layout()
             plt.savefig(filename)
         self.print_explained_inertia(modes=modes)
         return
