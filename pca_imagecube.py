@@ -6,7 +6,7 @@ Created on Mon Apr  2 14:51:03 2018
 @author: jmilli
 """
 import os
-from image_tools import distance_array,angle_array
+# from image_tools import distance_array
 import numpy as np
 from astropy.io import fits
 import pca as pca
@@ -56,7 +56,6 @@ class pca_imagecube(object):
         self.set_prefix(name+'_'+method+'_'+'-'.join(['{0:d}'.format(i) for i in radii]))
         self.header=header
         distarr = distance_array((self.ny,self.nx),verbose=False)
-        anglarr = angle_array((self.ny,self.nx),verbose=False)
         self.region_map = np.zeros((self.ny,self.nx),dtype=int)
         self.nb_annuli = len(radii)-1
         self.Nobj_array = np.ndarray(self.nb_annuli)
@@ -344,6 +343,41 @@ class pca_imagecube(object):
         ax2.set_xscale("log")
         fig.savefig(os.path.join(self.path,self.prefix+'_statistics.pdf'))
         return
+
+def distance_array(shape,centerx=None,centery=None,verbose=True,fullOutput=False):
+    """
+    Creates a 2d array with the distance from the center of the frame.
+    Input: 
+        - shape: a tuple indicating the desired shape of the output array, e.g. (100,100)
+                The 1st dim refers to the y dimension and the 2nd to the x dimension
+        - centerx: the center of the frame from which to compute the distance from
+                    by default shape[1]/2 (integer division). Accepts numerical value
+        - centery: same for the y dimension
+        - verbose: to print a warning for even dimensions
+        - fullOutput: if True returns the distance array and in addition the 2d array
+                    of x values and y values in 2nd and 3rd ouptuts.
+    """
+    if len(shape) != 2 :
+        raise ValueError('The shape must be a tuple of 2 elements for the y and x dimension!')
+    if centerx == None:
+        centerx = shape[1]//2
+        if np.mod(shape[1],2) == 0 and verbose:
+            print('The X dimension is even ({0:d}), the center is assumed to be in {1:d}. Use the option centerx={2:.1f} if the center is between 4 pixels'.format(shape[1],centerx,shape[1]/2.-0.5))
+        if np.mod(shape[1],2) == 1 and verbose:
+            print('The X dimension is odd ({0:d}), the center is assumed to be in {1:d}'.format(shape[1],centerx))
+    if centery == None:
+        centery = shape[0]//2
+        if np.mod(shape[0],2) == 0 and verbose:
+            print('The Y dimension is even ({0:d}), the center is assumed to be in {1:d}. Use the option centery={2:.1f} if the center is between 4 pixels'.format(shape[0],centery,shape[0]/2.-0.5))
+        if np.mod(shape[0],2) == 1 and verbose:
+            print('The Y dimension is odd ({0:d}), the center is assumed to be in {1:d}'.format(shape[0],centery))
+    x_array = np.arange(shape[1])-centerx
+    y_array = np.arange(shape[0])-centery
+    xx_array,yy_array=np.meshgrid(x_array,y_array)
+    dist_center = np.abs(xx_array+1j*yy_array)
+    if fullOutput:
+        return dist_center,xx_array,yy_array
+    return dist_center
 
 if __name__=='__main__':
 
